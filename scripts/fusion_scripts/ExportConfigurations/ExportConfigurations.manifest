@@ -1,0 +1,10 @@
+{
+	"autodeskProduct":	"Fusion",
+	"type":	"addin",
+	"author":	"ORCA Hand",
+	"description":	{
+		"":	"Export STL files for each configuration in the active design. Shows a UI to select configurations and export location."
+	},
+	"supportedOS":	"windows|mac",
+	"editEnabled":	true
+}

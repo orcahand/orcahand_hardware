@@ -1,0 +1,25 @@
+{
+  "name": "orca-files-sync",
+  "version": "1.0.0",
+  "description": "Automated sync system for ORCA files to Firebase Storage",
+  "main": "scripts/sync.js",
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync.js",
+    "sync-all": "node scripts/sync-all.js",
+    "sync-changelog": "node scripts/sync-changelog.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "dependencies": {
+    "firebase": "^10.7.1",
+    "firebase-admin": "^12.0.0",
+    "archiver": "^6.0.1",
+    "simple-git": "^3.21.0"
+  },
+  "devDependencies": {
+    "dotenv": "^16.3.1"
+  },
+  "keywords": ["firebase", "sync", "orca", "automation"],
+  "author": "ORCA Team",
+  "license": "MIT"
+} 

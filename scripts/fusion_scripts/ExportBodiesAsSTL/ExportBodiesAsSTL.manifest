@@ -1,0 +1,10 @@
+{
+	"autodeskProduct":	"Fusion",
+	"type":	"addin",
+	"author":	"ORCA Hand",
+	"description":	{
+		"":	"Select bodies from the design and export them as a single combined STL file."
+	},
+	"supportedOS":	"windows|mac",
+	"editEnabled":	true
+}
