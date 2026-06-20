@@ -1,6 +1,17 @@
+<div align="center" style="line-height: 1;">
+  <a href="https://arxiv.org/abs/2504.04259" target="_blank"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2504.04259-B31B1B?logo=arxiv"/></a>
+  <a href="https://discord.gg/xvGyxaccRa" target="_blank"><img alt="Discord" src="https://img.shields.io/badge/Discord-orcahand-7289da?logo=discord&logoColor=white&color=7289da"/></a>
+  <a href="https://x.com/orcahand" target="_blank"><img alt="Twitter Follow" src="https://img.shields.io/twitter/follow/orcahand?style=social"/></a>
+  <a href="https://orcahand.com" target="_blank"><img alt="Website" src="https://img.shields.io/badge/Website-orcahand.com-blue?style=flat&logo=google-chrome"/></a>
+  <br>
+  <a href="https://github.com/orcahand/orca_files" target="_blank"><img alt="GitHub stars" src="https://img.shields.io/github/stars/orcahand/orca_files?style=social"/></a>
+</div>
+
 # ORCA Hand Files
 
-CAD files and print files for the ORCA robotic hand.
+CAD and print files for the ORCA robotic hand.
+
+The ORCA Hand now supports both **Feetech** and **Dynamixel** servos. Every printable variant ships two ready-to-print plates — `*-FT.3mf` for Feetech and `*-DX.3mf` for Dynamixel — so you can build the hand around whichever actuators you have. STL sources are shared across both; only the motor-specific parts (forearm/wrist structures, adapters) differ between the FT and DX plates.
 
 ## Structure
 
@@ -51,14 +62,6 @@ python3 scripts/update_3mf.py orca_v2/base/Prints-1000-DX.3mf --all --dry-run
 
 # List parts inside a 3MF
 python3 scripts/update_3mf.py orca_v2/base/Prints-1000-DX.3mf --list
-```
-
-## Firebase Sync
-
-```bash
-npm install
-npm run sync          # sync changed files
-npm run sync-all      # sync everything
 ```
 
 ## License
