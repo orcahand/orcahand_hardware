@@ -28,7 +28,7 @@ orca_v2/                          # Current ORCA hand — shared base + variants
   joint-sensing/                  # Joint-sensing variant — STL sources (3MFs TBD)
     01_Fingers/*JS*.stl
 
-orca_v1/01_CAD/                   # V1 design (self-contained)
+orca_v1/                         # V1 design (self-contained)
   Print_Files_Bambu/*.3mf         # Print files in dedicated subdir
   ORCA_Fingers/*.stl              # STLs in sibling dirs
   ORCA_Tower/*.stl
@@ -60,3 +60,13 @@ npm install
 npm run sync          # sync changed files
 npm run sync-all      # sync everything
 ```
+
+## License
+
+Copyright (c) 2026 ORCA Dexterity, Inc.
+
+All files in this repository — hardware designs (CAD/STL/3MF) and source code —
+are licensed under the [Creative Commons Attribution 4.0 International License
+(CC BY 4.0)](LICENSE). You may share and adapt the material for any purpose,
+including commercially, with appropriate credit. No patent or trademark rights
+are granted.

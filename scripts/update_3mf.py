@@ -37,7 +37,7 @@ def get_model_root(filepath: str) -> str | None:
          'orca_v2/touch/Prints16.3mf' -> 'orca_v2/' (returns the v2 root,
          not the variant subfolder, so STL search descends into both
          the variant and orca_v2/base/ in a single rglob pass)
-         'orca_v1/01_CAD/Print_Files_Bambu/ORCA_Tower.3mf' -> 'orca_v1/'
+         'orca_v1/Print_Files_Bambu/ORCA_Tower.3mf' -> 'orca_v1/'
     """
     p = Path(filepath).resolve()
     for part in p.parts:
