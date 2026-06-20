@@ -176,8 +176,42 @@ def save_update_time():
         log(f"  WARNING: could not save timestamp: {e}")
 
 
+def find_git_changed_stls():
+    """STLs with uncommitted changes (modified/added/untracked) per git, under
+    MODEL_DIRS. Returns a sorted list, or None if git is unavailable."""
+    if not git_available():
+        return None
+    try:
+        r = subprocess.run(
+            ["git", "status", "--porcelain", "--", *MODEL_DIRS],
+            capture_output=True, text=True, cwd=REPO_ROOT, timeout=GIT_TIMEOUT,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode != 0:
+        return None
+    changed = set()
+    for line in r.stdout.splitlines():
+        path = line[3:].strip()  # drop the XY status code + space
+        if " -> " in path:       # rename: keep the new path
+            path = path.split(" -> ", 1)[1]
+        path = path.strip().strip('"')
+        if path.endswith(".stl"):
+            changed.add(path)
+    return sorted(changed)
+
+
 def find_changed_stls():
-    """Find STL files modified since the last successful run."""
+    """Find STL files that changed since the last run.
+
+    Prefers git: only STLs with uncommitted working-tree changes are treated as
+    changed — so a missing/stale timestamp can never mass-flag every STL. Falls
+    back to mtime vs .last_update_timestamp only when git is unavailable."""
+    git_changed = find_git_changed_stls()
+    if git_changed is not None:
+        log(f"  Detected {len(git_changed)} changed STL(s) via git working tree")
+        return git_changed
+
     last_update = get_last_update_time()
     stl_paths = set()
 
