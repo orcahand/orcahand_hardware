@@ -29,6 +29,17 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 MODEL_DIRS = ["orca_v2"]
 TIMESTAMP_FILE = REPO_ROOT / ".last_update_timestamp"
+BACKUP_ROOT = REPO_ROOT / ".backups"
+KEEP_BACKUPS = 5  # number of most-recent backup snapshots to retain
+
+
+def prune_backups(root=BACKUP_ROOT, keep=KEEP_BACKUPS):
+    """Keep only the `keep` most recent timestamped backup dirs under root."""
+    if not root.is_dir():
+        return
+    snaps = sorted((p for p in root.iterdir() if p.is_dir()), key=lambda p: p.name)
+    for old in snaps[:-keep]:
+        shutil.rmtree(old, ignore_errors=True)
 
 
 def log(msg=""):
@@ -323,7 +334,7 @@ def main():
     if not dry_run:
         log_step(3, "Backing up 3MF files")
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        backup_dir = REPO_ROOT / ".backups" / timestamp
+        backup_dir = BACKUP_ROOT / timestamp
 
         for tmf in sorted(threemf_to_stls.keys()):
             src = REPO_ROOT / tmf
@@ -333,7 +344,8 @@ def main():
             log(f"    Backed up: {tmf}")
             log(f"      -> {dst.relative_to(REPO_ROOT)}")
 
-        log(f"\n  Backups saved to: .backups/{timestamp}/")
+        prune_backups()
+        log(f"\n  Backups saved to: .backups/{timestamp}/ (keeping last {KEEP_BACKUPS})")
     else:
         log_step(3, "Backing up 3MF files (skipped — dry run)")
 
