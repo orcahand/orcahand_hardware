@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.png" alt="ORCA Hand" width="100%"/>
+</p>
+
 <div align="center" style="line-height: 1;">
   <a href="https://arxiv.org/abs/2504.04259" target="_blank"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2504.04259-B31B1B?logo=arxiv"/></a>
   <a href="https://discord.gg/xvGyxaccRa" target="_blank"><img alt="Discord" src="https://img.shields.io/badge/Discord-orcahand-7289da?logo=discord&logoColor=white&color=7289da"/></a>
