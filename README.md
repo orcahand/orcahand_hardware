@@ -52,6 +52,13 @@ orca_v1/                         # V1 design (self-contained)
 
 Variant 3MFs under `orca_v2/<variant>/` automatically resolve part names against the whole `orca_v2/` tree, so they pick up shared STLs from `orca_v2/base/` without duplication. Edit a base STL once and every variant 3MF that references it gets updated.
 
+## Assembly
+
+The [assembly tutorial video](https://www.youtube.com/watch?v=TgIz7HiyaoU) covers the full build.
+Some parts have changed since it was recorded — see
+[`orca_v2/base/ASSEMBLY_ADDENDUM.md`](orca_v2/base/ASSEMBLY_ADDENDUM.md) for the differences
+(PTFE tubes, thumb AP pins, carpals pins/gear/bearings, the V1100 spools) and extra assembly tips.
+
 ## Updating Print Files After STL Changes
 
 ```bash
