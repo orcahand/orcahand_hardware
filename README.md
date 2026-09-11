@@ -15,23 +15,23 @@
 
 CAD and print files for the ORCA robotic hand.
 
-The ORCA Hand now supports both **Feetech** and **Dynamixel** servos. Every printable variant ships two ready-to-print plates — `*-FT.3mf` for Feetech and `*-DX.3mf` for Dynamixel — so you can build the hand around whichever actuators you have. STL sources are shared across both; only the motor-specific parts (forearm/wrist structures, adapters) differ between the FT and DX plates.
+The ORCA Hand supports both **Feetech** and **Dynamixel** servos. The base hand ships a single ready-to-print file, `Prints-1100.3mf`, containing plates for both actuator options — print the forearm/wrist parts for the servos you have and skip the others. The touch variant still ships a separate plate per actuator (`*-DX.3mf` / `*-FT.3mf`). STL sources are shared throughout; only the motor-specific parts (forearm/wrist structures, adapters) differ between Feetech and Dynamixel.
 
 ## Structure
 
 ```
 orca_v2/                          # Current ORCA hand — shared base + variants
   base/                           # Canonical full hand
-    Prints-1000-DX.3mf            # Dynamixel print plate
-    Prints-1000-FT.3mf            # Feetech print plate
-    Clips-Only.3mf
+    Prints-1100.3mf               # Print file — plates for both Dynamixel and Feetech
     01_Fingers/*.stl              # STL source files in subdirs
     02_Carpals/*.stl
     03_Wrist/*.stl
     04_ForeArm/*.stl
     05_Spools/*.stl
-    07_Molds/*.stl
-    ...
+    06_CNC/*.stl
+    07_Molds/*.stl                # incl. Clips-Only.3mf
+    08_MoldsWithClips/*.stl
+    09_Skin/*.stl
   touch/                          # Touch-sensor variant
     Prints-2000-DX.3mf            # Pulls base + touch STLs in one pass
     Prints-2000-FT.3mf
@@ -62,10 +62,10 @@ python3 scripts/find_3mf_for_file.py orca_v2/base/05_Spools/BaseSpool.stl
 python3 scripts/update_3mf.py orca_v2/touch/Prints-2000-DX.3mf --all
 
 # Preview without writing
-python3 scripts/update_3mf.py orca_v2/base/Prints-1000-DX.3mf --all --dry-run
+python3 scripts/update_3mf.py orca_v2/base/Prints-1100.3mf --all --dry-run
 
 # List parts inside a 3MF
-python3 scripts/update_3mf.py orca_v2/base/Prints-1000-DX.3mf --list
+python3 scripts/update_3mf.py orca_v2/base/Prints-1100.3mf --list
 ```
 
 ## License
