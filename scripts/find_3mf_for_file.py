@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """Map STL file paths to the 3MF file(s) that contain them.
 
-For files under orca_v2/, the search spans every variant 3MF (base + touch +
-lite + joint-sensing) so that editing a shared base STL correctly cascades into
-every variant 3MF that references it.
+A 3MF is listed only if update_3mf.py would actually pull its part from this
+exact STL, using the same variant search rules (touch -> touch + base,
+lite -> lite + base, joint-sensing -> joint-sensing + base, base -> base).
+So a base STL cascades into every variant 3MF that uses it, while a variant
+STL (or a variant's own copy of a base name) never flags another variant.
 
 Usage:
   python find_3mf_for_file.py orca_v2/base/05_Spools/BaseSpool.stl
-  # BaseSpool.stl -> orca_v2/base/Prints16.3mf
-  # BaseSpool.stl -> orca_v2/joint-sensing/Prints-2500-FT.3mf
+  # BaseSpool.stl -> orca_v2/base/Prints-1100.3mf
+  # BaseSpool.stl -> orca_v2/touch/Prints-2100.3mf
 """
 
 from __future__ import annotations
@@ -19,6 +21,9 @@ import sys
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from update_3mf import find_stl_file, get_search_dirs  # noqa: E402
 
 MODEL_ROOTS = ["orca_v1", "orca_v2"]
 
@@ -72,6 +77,8 @@ def find_3mf_for_files(stl_paths: list[str]) -> dict[str, list[str]]:
 
     # Cache: model_root -> {3mf_path: [part_names]}
     model_3mf_cache: dict[str, dict[str, list[str]]] = {}
+    # Cache: (3mf_path, part_name) -> STL that update_3mf.py would use
+    resolved: dict[tuple[str, str], str | None] = {}
 
     results: dict[str, list[str]] = {}
 
@@ -84,11 +91,19 @@ def find_3mf_for_files(stl_paths: list[str]) -> dict[str, list[str]]:
 
         for stl_path in stl_paths_in_model:
             stl_name = Path(stl_path).name
+            target = Path(stl_path).resolve()
             matches = []
             for tmf_path, part_names in model_3mf_cache[model_root].items():
-                if stl_name in part_names:
+                if stl_name not in part_names:
+                    continue
+                key = (tmf_path, stl_name)
+                if key not in resolved:
+                    search_dirs = get_search_dirs(tmf_path)
+                    resolved[key] = find_stl_file(stl_name, search_dirs) if search_dirs else None
+                if resolved[key] and Path(resolved[key]).resolve() == target:
                     matches.append(tmf_path)
-            results[stl_name] = sorted(matches)
+            # Same name changed in two variants (e.g. base + touch Coav-R.stl): merge
+            results[stl_name] = sorted(set(results.get(stl_name, [])) | set(matches))
 
     return results
 

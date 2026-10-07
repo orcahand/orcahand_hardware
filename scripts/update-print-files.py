@@ -14,6 +14,11 @@ Usage:
   python3 scripts/update-print-files.py --dry-run     # preview without writing
   python3 scripts/update-print-files.py --no-push     # commit but don't push (requires --git)
   python3 scripts/update-print-files.py --yes         # skip the confirmation prompt
+  python3 scripts/update-print-files.py --no-git-check  # write even if not confirmed up to date
+
+Every live run first checks that this checkout is not behind its remote
+(update_3mf.git_gate) and stops before touching anything if it is, or if that
+cannot be confirmed. With --git the script pulls first, then checks.
 """
 
 import getpass
@@ -243,6 +248,7 @@ def main():
     full_sync = "--full-sync" in args
     no_push = "--no-push" in args
     assume_yes = "--yes" in args or "-y" in args
+    no_git_check = "--no-git-check" in args
     # Git is off by default (shared Google Drive causes lock conflicts).
     # Auto-enable for the 'ccc' user, or explicitly with --git.
     use_git = "--git" in args or getpass.getuser() == "ccc"
@@ -274,6 +280,22 @@ def main():
             log(f"\n  Git not available (skipping fetch — dry run)")
     else:
         branch = None
+
+    # Gate: never write print files from a checkout that may be stale.
+    if not dry_run:
+        if no_git_check:
+            log("\n  WARNING: --no-git-check — not verifying this checkout is up to date")
+        else:
+            sys.path.insert(0, str(SCRIPT_DIR))
+            from update_3mf import git_gate
+            reason = git_gate(str(REPO_ROOT))
+            if reason:
+                log(f"\n  STOP: {reason}.")
+                log("  Nothing was written or backed up. Update the checkout (or run with")
+                log("  --git to let this script pull), then re-run. Override: --no-git-check")
+                log()
+                return 2
+            log("\n  Git check: up to date with remote")
 
     orphan_stls = []
     stl_path_by_name: dict[str, str] = {}
@@ -400,6 +422,8 @@ def main():
             cmd.extend(["--stl"] + stl_names)
         if dry_run:
             cmd.append("--dry-run")
+        else:
+            cmd.append("--no-git-check")  # checked once above, before any write
 
         r = run(cmd)
 
