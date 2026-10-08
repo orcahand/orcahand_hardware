@@ -64,3 +64,6 @@ firebase-debug.log
 # Large media (exceeds GitHub 100MB limit)
 *.mp4
 *.mov
+
+# Local Bambu Studio copy of the base print file (not tracked)
+orca_v2/base/Bambu-Prints-1100.3mf
