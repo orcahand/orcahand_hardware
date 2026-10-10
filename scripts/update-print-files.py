@@ -14,6 +14,18 @@ Usage:
   python3 scripts/update-print-files.py --dry-run     # preview without writing
   python3 scripts/update-print-files.py --no-push     # commit but don't push (requires --git)
   python3 scripts/update-print-files.py --yes         # skip the confirmation prompt
+  python3 scripts/update-print-files.py --no-git-check  # write even if not confirmed up to date
+
+Every live run first checks that this checkout is not behind its remote
+(update_3mf.git_gate) and stops before touching anything if it is, or if that
+cannot be confirmed. With --git the script pulls first, then checks.
+
+The changed STLs are audited against git HEAD before anything is written and the
+rewritten 3MFs afterwards (scripts/print_audit.py); the report lands in
+.backups/<timestamp>/audit.json. Flagged changes need a confirmation before the
+3MFs are written and again before commit+push; a confirmed push carries
+ORCA_AUDIT_APPROVE=1 so the pre-push hook does not ask a third time. With --yes
+the hook still asks.
 """
 
 import getpass
@@ -71,13 +83,26 @@ def confirm(prompt, default=True):
     return answer in ("y", "yes")
 
 
-def run(cmd, timeout=None, **kwargs):
+def run(cmd, timeout=None, stream=False, **kwargs):
+    """Run a command, logging its output. stream=True leaves stdout/stderr attached to the
+    terminal instead (needed when the child asks the user something, e.g. the pre-push hook)."""
     log(f"  $ {' '.join(cmd)}")
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT, timeout=timeout, **kwargs)
+        result = subprocess.run(
+            cmd,
+            capture_output=not stream,
+            text=True,
+            cwd=REPO_ROOT,
+            timeout=timeout,
+            **kwargs,
+        )
+        if stream:
+            return result
     except subprocess.TimeoutExpired:
         log(f"  WARNING: command timed out after {timeout}s: {' '.join(cmd)}")
-        return subprocess.CompletedProcess(cmd, returncode=1, stdout="", stderr="timed out")
+        return subprocess.CompletedProcess(
+            cmd, returncode=1, stdout="", stderr="timed out"
+        )
     if result.stdout.strip():
         for line in result.stdout.strip().splitlines():
             log(f"    {line}")
@@ -92,7 +117,9 @@ def git_available():
     try:
         r = subprocess.run(
             ["git", "rev-parse", "--git-dir"],
-            capture_output=True, text=True, cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
             timeout=10,
         )
         return r.returncode == 0
@@ -104,7 +131,10 @@ def git_available():
 os.environ["GIT_TERMINAL_PROMPT"] = "0"
 
 
-GIT_TIMEOUT = 30  # seconds — prevent git from hanging on credential prompts or slow networks
+GIT_TIMEOUT = (
+    30  # seconds — prevent git from hanging on credential prompts or slow networks
+)
+
 
 def git_run(cmd, **kwargs):
     """Run a git command best-effort. Returns result or None on failure."""
@@ -184,7 +214,10 @@ def find_git_changed_stls():
     try:
         r = subprocess.run(
             ["git", "status", "--porcelain", "--", *MODEL_DIRS],
-            capture_output=True, text=True, cwd=REPO_ROOT, timeout=GIT_TIMEOUT,
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+            timeout=GIT_TIMEOUT,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return None
@@ -193,7 +226,7 @@ def find_git_changed_stls():
     changed = set()
     for line in r.stdout.splitlines():
         path = line[3:].strip()  # drop the XY status code + space
-        if " -> " in path:       # rename: keep the new path
+        if " -> " in path:  # rename: keep the new path
             path = path.split(" -> ", 1)[1]
         path = path.strip().strip('"')
         if path.endswith(".stl"):
@@ -236,6 +269,44 @@ def find_3mfs_for_stls(stl_paths):
     return json.loads(r.stdout)
 
 
+def audit_files(paths):
+    """Run print_audit.py on these working-tree files (vs HEAD). Returns the report dict
+    or None when the audit could not run. Prints flags and info lines."""
+    if not paths or not git_available():
+        return None
+    script = str(SCRIPT_DIR / "print_audit.py")
+    try:
+        r = subprocess.run(
+            [sys.executable, script, "--json", "--files"] + list(paths),
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+            timeout=600,
+        )
+    except subprocess.TimeoutExpired:
+        log("  WARNING: audit timed out")
+        return None
+    if r.returncode == 2 or not r.stdout.strip():
+        log(f"  WARNING: audit could not run: {r.stderr.strip()}")
+        return None
+    report = json.loads(r.stdout)
+    for entry in report["files"]:
+        marks = [f for f in entry["findings"] if f["level"] == "flag"]
+        infos = [f for f in entry["findings"] if f["level"] == "info"]
+        log(f"    {entry['file']}  ({entry['status']})")
+        for f in marks:
+            log(f"      FLAG  {f['text']}")
+        for f in infos:
+            log(f"      info  {f['text']}")
+    if report["flagged_count"]:
+        log(
+            f"\n  AUDIT: {report['flagged_count']} file(s) changed beyond thresholds (see FLAG lines)"
+        )
+    else:
+        log("\n  Audit: clean — all changes within thresholds")
+    return report
+
+
 def main():
     args = sys.argv[1:]
     dry_run = "--dry-run" in args
@@ -243,6 +314,7 @@ def main():
     full_sync = "--full-sync" in args
     no_push = "--no-push" in args
     assume_yes = "--yes" in args or "-y" in args
+    no_git_check = "--no-git-check" in args
     # Git is off by default (shared Google Drive causes lock conflicts).
     # Auto-enable for the 'ccc' user, or explicitly with --git.
     use_git = "--git" in args or getpass.getuser() == "ccc"
@@ -259,7 +331,14 @@ def main():
     log(f"  Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     if use_git:
-        log(f"  Git operations: enabled" + (" (auto: user=ccc)" if getpass.getuser() == "ccc" and "--git" not in args else ""))
+        log(
+            f"  Git operations: enabled"
+            + (
+                " (auto: user=ccc)"
+                if getpass.getuser() == "ccc" and "--git" not in args
+                else ""
+            )
+        )
     else:
         log(f"  Git operations: disabled (use --git to enable)")
 
@@ -275,6 +354,29 @@ def main():
     else:
         branch = None
 
+    # Gate: never write print files from a checkout that may be stale.
+    if not dry_run:
+        if no_git_check:
+            log(
+                "\n  WARNING: --no-git-check — not verifying this checkout is up to date"
+            )
+        else:
+            sys.path.insert(0, str(SCRIPT_DIR))
+            from update_3mf import git_gate
+
+            reason = git_gate(str(REPO_ROOT))
+            if reason:
+                log(f"\n  STOP: {reason}.")
+                log(
+                    "  Nothing was written or backed up. Update the checkout (or run with"
+                )
+                log(
+                    "  --git to let this script pull), then re-run. Override: --no-git-check"
+                )
+                log()
+                return 2
+            log("\n  Git check: up to date with remote")
+
     orphan_stls = []
     stl_path_by_name: dict[str, str] = {}
 
@@ -288,7 +390,9 @@ def main():
                 continue
             for tmf in sorted(model_path.rglob("*.3mf")):
                 rel = str(tmf.relative_to(REPO_ROOT))
-                threemf_to_stls[rel] = []  # --all flag on update_3mf.py will handle finding parts
+                threemf_to_stls[
+                    rel
+                ] = []  # --all flag on update_3mf.py will handle finding parts
                 log(f"    {rel}")
 
         if not threemf_to_stls:
@@ -346,9 +450,25 @@ def main():
         else:
             log(f"    {tmf} (all parts)")
 
+    # Audit the changed STLs against HEAD before anything is written
+    audit_before = None
+    if stl_paths:
+        log_step("2b", "Auditing changed STLs against git HEAD")
+        audit_before = audit_files(stl_paths)
+        if audit_before is None:
+            log("  (audit skipped)")
+
     # Confirm before making any changes (skipped on dry run or with --yes)
     if not dry_run and not assume_yes:
-        if not confirm("Proceed with updating these 3MF file(s)?", default=True):
+        if audit_before and audit_before["flagged_count"]:
+            if not confirm(
+                "STL changes exceed the audit thresholds. Still update the 3MF file(s)?",
+                default=False,
+            ):
+                log("\n  Aborted — no changes made.")
+                log()
+                return 0
+        elif not confirm("Proceed with updating these 3MF file(s)?", default=True):
             log("\n  Aborted — no changes made.")
             log()
             return 0
@@ -358,7 +478,9 @@ def main():
         if assume_yes:
             commit_push = True
         else:
-            commit_push = confirm("Commit and push the changes when done?", default=True)
+            commit_push = confirm(
+                "Commit and push the changes when done?", default=True
+            )
         if not commit_push:
             use_git = False
             log("  Will update files only — skipping commit and push.")
@@ -379,7 +501,9 @@ def main():
             log(f"      -> {dst.relative_to(REPO_ROOT)}")
 
         prune_backups()
-        log(f"\n  Backups saved to: .backups/{timestamp}/ (keeping last {KEEP_BACKUPS})")
+        log(
+            f"\n  Backups saved to: .backups/{timestamp}/ (keeping last {KEEP_BACKUPS})"
+        )
     else:
         log_step(3, "Backing up 3MF files (skipped — dry run)")
 
@@ -400,6 +524,8 @@ def main():
             cmd.extend(["--stl"] + stl_names)
         if dry_run:
             cmd.append("--dry-run")
+        else:
+            cmd.append("--no-git-check")  # checked once above, before any write
 
         r = run(cmd)
 
@@ -417,17 +543,63 @@ def main():
 
     if full_sync:
         for tmf in sorted(threemf_to_stls.keys()):
-            results.setdefault(tmf, []).append({"3mf": tmf, "status": tmf_status.get(tmf, "unknown")})
+            results.setdefault(tmf, []).append(
+                {"3mf": tmf, "status": tmf_status.get(tmf, "unknown")}
+            )
 
     for stl_path in orphan_stls:
-        results.setdefault(stl_path, []).append({"3mf": "—", "status": "not in any 3MF"})
+        results.setdefault(stl_path, []).append(
+            {"3mf": "—", "status": "not in any 3MF"}
+        )
+
+    # Step 4b: Audit the rewritten 3MFs against HEAD, keep the report with the backups
+    audit_after = None
+    audit_approved = False
+    if not dry_run:
+        log_step("4b", "Auditing updated 3MF files against git HEAD")
+        audit_after = audit_files(sorted(threemf_to_stls.keys()))
+        if audit_after is None:
+            log("  (audit skipped)")
+        if backup_dir and (audit_before or audit_after):
+            report_path = backup_dir / "audit.json"
+            report_path.write_text(
+                json.dumps(
+                    {"stl_before": audit_before, "3mf_after": audit_after}, indent=2
+                )
+            )
+            log(f"  Audit report: {report_path.relative_to(REPO_ROOT)}")
+        flagged = bool(
+            (audit_before and audit_before["flagged_count"])
+            or (audit_after and audit_after["flagged_count"])
+        )
+        if flagged and use_git:
+            if assume_yes:
+                log(
+                    "  Flagged changes: the pre-push hook will ask for approval (or set ORCA_AUDIT_APPROVE=1)."
+                )
+            elif confirm(
+                "Audit flagged these changes. Commit and push them anyway?",
+                default=False,
+            ):
+                audit_approved = True
+            else:
+                use_git = False
+                log(
+                    "  Files updated, not committed. Review, then commit and push by hand."
+                )
+    else:
+        log_step("4b", "Auditing updated 3MF files (skipped — dry run)")
 
     # Step 5: Git add (best-effort)
     has_git = use_git and git_available()
     paths_to_stage = []
     if not dry_run and has_git:
         log_step(5, "Staging files with git add")
-        paths_to_stage = list(stl_paths) + list(threemf_to_stls.keys()) if not full_sync else list(threemf_to_stls.keys())
+        paths_to_stage = (
+            list(stl_paths) + list(threemf_to_stls.keys())
+            if not full_sync
+            else list(threemf_to_stls.keys())
+        )
         paths_to_stage = [p for p in paths_to_stage if (REPO_ROOT / p).exists()]
         if paths_to_stage:
             git_run(["git", "add"] + paths_to_stage)
@@ -450,7 +622,9 @@ def main():
             if len(stl_names) <= 5:
                 parts_list = ", ".join(stl_names)
             else:
-                parts_list = ", ".join(stl_names[:5]) + f", and {len(stl_names) - 5} more"
+                parts_list = (
+                    ", ".join(stl_names[:5]) + f", and {len(stl_names) - 5} more"
+                )
             commit_msg = f"Update {parts_list} in 3MF print files"
         r = git_run(["git", "commit", "-m", commit_msg])
         if r and r.returncode == 0:
@@ -468,9 +642,17 @@ def main():
         branch = branch or get_current_branch()
         if branch:
             log_step(7, f"Pushing to origin/{branch}")
-            r = git_run(["git", "push", "origin", branch])
+            push_env = dict(os.environ)
+            if audit_approved:
+                push_env["ORCA_AUDIT_APPROVE"] = (
+                    "1"  # already confirmed above; don't ask twice
+                )
+            # Streamed, generous timeout: the pre-push hook prints its audit and may ask
+            # for 'approve' on the terminal.
+            r = git_run(["git", "push", "origin", branch], env=push_env, stream=True, timeout=600)
             if not r or r.returncode != 0:
-                log("  WARNING: push failed (credentials or network issue), continuing anyway")
+                log("  WARNING: push failed (pre-push audit not approved, credentials or network), "
+                    "continuing anyway")
             else:
                 log(f"  Pushed to origin/{branch}")
         else:
@@ -488,8 +670,14 @@ def main():
     if results:
         first_col_label = "3MF file" if full_sync else "STL file"
         first_col = max(len(first_col_label), max(len(p) for p in results))
-        tmf_col = max(len("3MF file(s)"), max(len(e["3mf"]) for entries in results.values() for e in entries))
-        stat_col = max(len("Status"), max(len(e["status"]) for entries in results.values() for e in entries))
+        tmf_col = max(
+            len("3MF file(s)"),
+            max(len(e["3mf"]) for entries in results.values() for e in entries),
+        )
+        stat_col = max(
+            len("Status"),
+            max(len(e["status"]) for entries in results.values() for e in entries),
+        )
 
         header = f"| {first_col_label:<{first_col}} | {'3MF file(s)':<{tmf_col}} | {'Status':<{stat_col}} |"
         sep = f"|-{'-' * first_col}-|-{'-' * tmf_col}-|-{'-' * stat_col}-|"
@@ -499,12 +687,25 @@ def main():
         for key in sorted(results.keys()):
             for i, entry in enumerate(results[key]):
                 display = key if i == 0 else ""
-                log(f"| {display:<{first_col}} | {entry['3mf']:<{tmf_col}} | {entry['status']:<{stat_col}} |")
+                log(
+                    f"| {display:<{first_col}} | {entry['3mf']:<{tmf_col}} | {entry['status']:<{stat_col}} |"
+                )
 
-    total_updated = sum(1 for entries in results.values() for e in entries if e["status"] == "updated")
-    total_dry = sum(1 for entries in results.values() for e in entries if e["status"] == "dry-run")
-    total_orphan = sum(1 for entries in results.values() for e in entries if e["status"] == "not in any 3MF")
-    total_error = sum(1 for entries in results.values() for e in entries if e["status"] == "error")
+    total_updated = sum(
+        1 for entries in results.values() for e in entries if e["status"] == "updated"
+    )
+    total_dry = sum(
+        1 for entries in results.values() for e in entries if e["status"] == "dry-run"
+    )
+    total_orphan = sum(
+        1
+        for entries in results.values()
+        for e in entries
+        if e["status"] == "not in any 3MF"
+    )
+    total_error = sum(
+        1 for entries in results.values() for e in entries if e["status"] == "error"
+    )
 
     if full_sync:
         log(f"\n  Total: {len(threemf_to_stls)} 3MF(s)")
@@ -522,11 +723,16 @@ def main():
     if backup_dir:
         timestamp = backup_dir.name
         log(f"\n  Backups saved to: .backups/{timestamp}/")
-        log(f"  To restore: cp .backups/{timestamp}/<model>/<file>.3mf <model>/<file>.3mf")
+        log(
+            f"  To restore: cp .backups/{timestamp}/<model>/<file>.3mf <model>/<file>.3mf"
+        )
 
     if not dry_run and not total_error:
         if committed:
-            log(f"\n  Changes committed" + (f" and pushed to origin/{branch}" if not no_push and has_git else ""))
+            log(
+                f"\n  Changes committed"
+                + (f" and pushed to origin/{branch}" if not no_push and has_git else "")
+            )
         else:
             log(f"\n  3MF files updated successfully")
         # Save timestamp so next run only picks up newer STLs
