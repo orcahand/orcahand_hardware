@@ -60,7 +60,6 @@ orca_v2/                          # Current ORCA hand — shared base + variants
     09_Skin/*.stl                 # Finger skin STLs (TPU)
     <section>/step_files/*.step   # STEP sources, named like the STL they belong to
     ASSEMBLY_ADDENDUM.md          # Assembly notes
-    manual-part-a.pdf             # Assembly manual
   touch/                          # Touch-sensor variant
     Prints-2100.3mf               # Hand print file (Dynamixel + Feetech plates)
     SiliconeMolds-2100.3mf        # Silicone skin molds
