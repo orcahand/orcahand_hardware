@@ -96,19 +96,6 @@ python3 scripts/update_3mf.py orca_v2/base/Prints-1100.3mf --list
 python3 scripts/update-print-files.py --git
 ```
 
-## Comparing Two Files
-
-```bash
-# Once: install the STEP reader
-(cd scripts/meshcompare && npm install)
-
-# Same? prints IDENTICAL. Different? opens an overlay (green = same, red = different)
-node scripts/meshcompare/meshcompare.js old.stl new.stl
-node scripts/meshcompare/meshcompare.js old.step new.step
-```
-
-See `scripts/meshcompare/README.md` for the options.
-
 ## License
 
 Copyright (c) 2026 ORCA Dexterity, Inc.

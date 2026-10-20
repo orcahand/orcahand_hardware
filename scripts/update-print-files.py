@@ -21,7 +21,7 @@ Every live run first checks that this checkout is not behind its remote
 cannot be confirmed. With --git the script pulls first, then checks.
 
 The changed STLs are audited against git HEAD before anything is written and the
-rewritten 3MFs afterwards (scripts/gate/print_audit.py); the report lands in
+rewritten 3MFs afterwards (scripts/print_audit.py); the report lands in
 .backups/<timestamp>/audit.json. Flagged changes need a confirmation before the
 3MFs are written and again before commit+push; a confirmed push carries
 ORCA_AUDIT_APPROVE=1 so the pre-push hook does not ask a third time. With --yes
@@ -274,7 +274,7 @@ def audit_files(paths):
     or None when the audit could not run. Prints flags and info lines."""
     if not paths or not git_available():
         return None
-    script = str(SCRIPT_DIR / "gate" / "print_audit.py")
+    script = str(SCRIPT_DIR / "print_audit.py")
     try:
         r = subprocess.run(
             [sys.executable, script, "--json", "--files"] + list(paths),
@@ -649,17 +649,10 @@ def main():
                 )
             # Streamed, generous timeout: the pre-push hook prints its audit and may ask
             # for 'approve' on the terminal.
-            r = git_run(
-                ["git", "push", "origin", branch],
-                env=push_env,
-                stream=True,
-                timeout=600,
-            )
+            r = git_run(["git", "push", "origin", branch], env=push_env, stream=True, timeout=600)
             if not r or r.returncode != 0:
-                log(
-                    "  WARNING: push failed (pre-push audit not approved, credentials or network), "
-                    "continuing anyway"
-                )
+                log("  WARNING: push failed (pre-push audit not approved, credentials or network), "
+                    "continuing anyway")
             else:
                 log(f"  Pushed to origin/{branch}")
         else:

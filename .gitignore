@@ -73,9 +73,3 @@ orca_v2/touch/Tough_Panda.3mf
 
 # Self-tapping HullBack variant, not ready to release (kept local, untracked)
 orca_v2/base/04_ForeArm/HullBack_self_Tapped.stl
-
-# OpenCascade + VTK for the STL/STEP gate (scripts/gate/install_hooks.py --cad)
-.cad-venv/
-
-# built by scripts/meshcompare/app/install.sh (osacompile); the sources are next to it
-scripts/meshcompare/app/MeshCompare.app
